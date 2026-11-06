@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: veridt_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: {POSTGRES_DB}
+      POSTGRES_USER: {POSTGRES_USER}
+      POSTGRES_PASSWORD: {POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - veridt-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U veridt_user -d veridt_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: veridt_backend
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/{POSTGRES_DB}
+      - SPRING_DATASOURCE_USERNAME={POSTGRES_USER}
+      - SPRING_DATASOURCE_PASSWORD={POSTGRES_PASSWORD}
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=validade
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - veridt-net
+
+volumes:
+  postgres_data:
+
+networks:
+  veridt-net:
+    driver: bridge
