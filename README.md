@@ -48,15 +48,13 @@ As características prioritárias são segurança, auditabilidade, confiabilidad
 
 **Pré-requisito:** Docker com Docker Compose.
 
-1. Crie um arquivo `.env` na raiz do projeto. Ele não deve ser commitado.
+1. Copie o `.env.example` para `.env` na raiz do projeto e defina uma senha. O `.env` não deve ser commitado.
 
-   ```properties
-   POSTGRES_DB=veridt_db
-   POSTGRES_USER=veridt_user
-   POSTGRES_PASSWORD=defina_uma_senha
+   ```bash
+   cp .env.example .env
    ```
 
-2. Suba o banco de dados e a aplicação:
+2. Suba o banco de dados, o Mailpit e a aplicação:
 
    ```bash
    docker compose up --build
@@ -66,6 +64,10 @@ As características prioritárias são segurança, auditabilidade, confiabilidad
 |---|---|
 | Aplicação | `http://localhost:8080` |
 | PostgreSQL | `localhost:5433` |
+| Mailpit (painel de e-mails) | `http://localhost:8025` |
+| Mailpit (SMTP) | `localhost:1025` |
+
+O Mailpit captura os e-mails enviados em desenvolvimento, sem entregá-los de verdade.
 
 Para encerrar:
 
