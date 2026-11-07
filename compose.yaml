@@ -21,6 +21,16 @@ services:
       timeout: 5s
       retries: 5
 
+  mailpit:
+    image: axllent/mailpit:v1.33.0
+    container_name: veridt_mailpit
+    restart: always
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    networks:
+      - veridt-net
+
   backend:
     build:
       context: .
@@ -34,9 +44,13 @@ services:
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
       - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
+      - SPRING_MAIL_HOST=mailpit
+      - SPRING_MAIL_PORT=1025
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     networks:
       - veridt-net
 
