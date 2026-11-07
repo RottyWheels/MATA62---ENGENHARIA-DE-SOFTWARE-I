@@ -46,6 +46,7 @@ services:
       - SPRING_JPA_HIBERNATE_DDL_AUTO=validate
       - SPRING_MAIL_HOST=mailpit
       - SPRING_MAIL_PORT=1025
+      - MAIL_FROM=${MAIL_FROM:-no-reply@veridt.local}
     depends_on:
       postgres:
         condition: service_healthy
