@@ -74,6 +74,14 @@ class EmailTemplateRendererTests {
 	}
 
 	@Test
+	void valorComMarcadorNaoESubstituidoDeNovo() {
+		RenderedEmail email = renderer.render(EmailType.RECUPERACAO_SENHA,
+				Map.of("nome", "{link}", "link", "https://veridt.local/redefinir", "validadeMinutos", "30"));
+
+		assertThat(email.htmlBody()).contains("Olá, {link}.");
+	}
+
+	@Test
 	void parametroAusenteGeraErro() {
 		assertThatThrownBy(() -> renderer.render(EmailType.COMPRA_CONFIRMADA, Map.of("nome", "Ana")))
 			.isInstanceOf(EmailTemplateException.class)

@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -23,6 +25,7 @@ public class EmailTemplateRenderer {
 
 	private static final String TEMPLATE_LOCATION = "templates/email/%s.html";
 	private static final Charset CHARSET = StandardCharsets.UTF_8;
+	private static final Pattern PLACEHOLDER = Pattern.compile("\\{(\\w+)}");
 
 	private final Map<EmailType, String> templates = new EnumMap<>(EmailType.class);
 
@@ -39,11 +42,15 @@ public class EmailTemplateRenderer {
 		if (!missing.isEmpty()) {
 			throw new EmailTemplateException("E-mail " + type + " sem os parâmetros " + missing);
 		}
-		String body = templates.get(type);
-		for (String name : type.requiredParameters()) {
+		// Uma única passada: um valor que contenha outro marcador, como "{link}", não é substituído de novo.
+		String body = PLACEHOLDER.matcher(templates.get(type)).replaceAll(match -> {
+			String name = match.group(1);
+			if (!type.requiredParameters().contains(name)) {
+				return Matcher.quoteReplacement(match.group());
+			}
 			// Com o charset, escapa só os caracteres especiais do HTML e preserva os acentos.
-			body = body.replace("{" + name + "}", HtmlUtils.htmlEscape(parameters.get(name), CHARSET.name()));
-		}
+			return Matcher.quoteReplacement(HtmlUtils.htmlEscape(parameters.get(name), CHARSET.name()));
+		});
 		return new RenderedEmail(type.subject(), body);
 	}
 

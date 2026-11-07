@@ -1,10 +1,10 @@
 package br.ufba.veridt.notification.internal.sender;
 
-/** Falha ao montar a mensagem para o servidor de e-mail. */
+/** Falha ao montar ou enviar o e-mail. A mensagem nunca contém destinatário nem conteúdo. */
 public class EmailDeliveryException extends RuntimeException {
 
-	public EmailDeliveryException(String message, Throwable cause) {
-		super(message, cause);
+	public EmailDeliveryException(String message) {
+		super(message);
 	}
 
 }

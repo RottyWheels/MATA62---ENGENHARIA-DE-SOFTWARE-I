@@ -32,7 +32,7 @@ class SmtpEmailSenderIntegrationTests {
 		JavaMailSenderImpl mailSender = new JavaMailSenderImpl();
 		mailSender.setHost(MAILPIT.getHost());
 		mailSender.setPort(MAILPIT.getMappedPort(1025));
-		sender = new SmtpEmailSender(mailSender, new NotificationProperties("no-reply@veridt.local"));
+		sender = new SmtpEmailSender(mailSender, new NotificationProperties("no-reply@veridt.local", 1));
 	}
 
 	@AfterAll

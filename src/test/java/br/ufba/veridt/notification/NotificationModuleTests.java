@@ -5,12 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -40,6 +42,9 @@ class NotificationModuleTests {
 	@Autowired
 	private JdbcTemplate jdbc;
 
+	@Autowired
+	private ApplicationContext context;
+
 	@BeforeEach
 	void limpar() {
 		sender.reset();
@@ -55,6 +60,26 @@ class NotificationModuleTests {
 		assertThat(enviado.recipient()).isEqualTo("ana@exemplo.com");
 		assertThat(enviado.email().subject()).isEqualTo("Compra de créditos confirmada");
 		await().atMost(ESPERA).until(() -> publicacoesPendentes() == 0);
+	}
+
+	@Test
+	void envioUsaOExecutorExclusivoEMantemOPadrao() {
+		publisher.publish(pedido("ana@exemplo.com"));
+
+		await().atMost(ESPERA).until(() -> sender.sent().size() == 1);
+		assertThat(sender.sent().getFirst().thread()).startsWith("notification-");
+		assertThat(context.containsBean("applicationTaskExecutor")).isTrue();
+	}
+
+	@Test
+	void parametroNuloNaoDerrubaQuemPublicouEFicaPendente() {
+		Map<String, String> parameters = new HashMap<>(pedido("ana@exemplo.com").parameters());
+		parameters.put("pacote", null);
+
+		publisher.publish(new EmailRequested("ana@exemplo.com", EmailType.COMPRA_CONFIRMADA, parameters));
+
+		await().atMost(ESPERA).until(() -> publicacoesComFalha() == 1);
+		assertThat(sender.sent()).isEmpty();
 	}
 
 	@Test

@@ -9,7 +9,7 @@ import br.ufba.veridt.notification.internal.template.RenderedEmail;
 /** Implementação falsa de {@link EmailSender} para testes: guarda os envios e pode simular falha. */
 class RecordingEmailSender implements EmailSender {
 
-	record SentEmail(String recipient, RenderedEmail email) {
+	record SentEmail(String recipient, RenderedEmail email, String thread) {
 	}
 
 	private final List<SentEmail> sent = new CopyOnWriteArrayList<>();
@@ -20,7 +20,7 @@ class RecordingEmailSender implements EmailSender {
 		if (failing) {
 			throw new IllegalStateException("Falha simulada no servidor de e-mail");
 		}
-		sent.add(new SentEmail(recipient, email));
+		sent.add(new SentEmail(recipient, email, Thread.currentThread().getName()));
 	}
 
 	List<SentEmail> sent() {
