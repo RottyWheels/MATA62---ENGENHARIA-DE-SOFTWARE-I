@@ -1,12 +1,17 @@
 package br.ufba.veridt.identity;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
+
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import br.ufba.veridt.identity.internal.domain.OabRegistrationType;
 import br.ufba.veridt.identity.internal.domain.Uf;
 import br.ufba.veridt.identity.internal.domain.UserType;
 import br.ufba.veridt.identity.internal.dto.OabRegistrationRequest;
 import br.ufba.veridt.identity.internal.dto.RegisterUserRequest;
+import jakarta.servlet.http.Cookie;
 
 /** Dados válidos para testes. Os CPFs são gerados com os dígitos verificadores corretos. */
 final class TestData {
@@ -14,6 +19,22 @@ final class TestData {
 	static final String SENHA = "Senha#Forte1";
 
 	private TestData() {
+	}
+
+	/**
+	 * Envia o token no cookie e no cabeçalho, como a SPA. O atalho {@code csrf()} do Spring Security não serve aqui: ele
+	 * troca o repositório de tokens do filtro compartilhado por um baseado em sessão e contamina os testes seguintes.
+	 */
+	static RequestPostProcessor csrfDaSpa() {
+		return request -> {
+			String token = UUID.randomUUID().toString();
+			Cookie[] existing = request.getCookies() == null ? new Cookie[0] : request.getCookies();
+			Cookie[] cookies = Arrays.copyOf(existing, existing.length + 1);
+			cookies[existing.length] = new Cookie("XSRF-TOKEN", token);
+			request.setCookies(cookies);
+			request.addHeader("X-XSRF-TOKEN", token);
+			return request;
+		};
 	}
 
 	static String cpf(String nineDigits) {

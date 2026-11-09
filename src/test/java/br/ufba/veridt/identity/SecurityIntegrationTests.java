@@ -1,7 +1,6 @@
 package br.ufba.veridt.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -15,11 +14,13 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -109,20 +110,70 @@ class SecurityIntegrationTests {
 	void logoutInvalidaASessao() throws Exception {
 		Cookie sessao = login("ana@exemplo.com", TestData.SENHA, null);
 
-		mvc.perform(post("/logout").cookie(sessao).with(csrf())).andExpect(status().isNoContent());
+		mvc.perform(post("/api/auth/logout").cookie(sessao).with(TestData.csrfDaSpa())).andExpect(status().isNoContent());
 
 		mvc.perform(get("/teste/eu").cookie(sessao)).andExpect(status().isUnauthorized());
 	}
 
 	@Test
 	void loginSemCsrfERecusado() throws Exception {
-		mvc.perform(post("/login").param("email", "ana@exemplo.com").param("senha", TestData.SENHA))
+		mvc.perform(requisicaoDeLogin("ana@exemplo.com", TestData.SENHA))
 			.andExpect(status().isForbidden())
 			.andExpect(jsonPath("$.code").value("ACESSO_NEGADO"));
 	}
 
+	/** Sem o atalho {@code csrf()}: faz o que a SPA fará, com o cookie e o cabeçalho reais. */
+	@Test
+	void fluxoRealDaSpaComTokenCsrf() throws Exception {
+		Cookie csrfLogin = csrfCookie();
+		MvcResult login = mvc.perform(requisicaoDeLogin("ana@exemplo.com", TestData.SENHA).cookie(csrfLogin)
+			.header("X-XSRF-TOKEN", csrfLogin.getValue())).andExpect(status().isNoContent()).andReturn();
+		Cookie sessao = sessionCookie(login);
+		mvc.perform(get("/teste/eu").cookie(sessao)).andExpect(status().isOk());
+
+		Cookie csrfLogout = csrfCookie();
+		mvc.perform(post("/api/auth/logout").cookie(sessao, csrfLogout).header("X-XSRF-TOKEN", csrfLogout.getValue()))
+			.andExpect(status().isNoContent());
+
+		mvc.perform(get("/teste/eu").cookie(sessao)).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void tokenCsrfErradoERecusado() throws Exception {
+		Cookie csrf = csrfCookie();
+
+		mvc.perform(requisicaoDeLogin("ana@exemplo.com", TestData.SENHA).cookie(csrf).header("X-XSRF-TOKEN", "errado"))
+			.andExpect(status().isForbidden());
+	}
+
+	@Test
+	void logoutSemSessaoRetorna401() throws Exception {
+		mvc.perform(post("/api/auth/logout").with(TestData.csrfDaSpa())).andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void loginSemCamposRetorna400() throws Exception {
+		mvc.perform(post("/api/auth/login").with(TestData.csrfDaSpa()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("DADOS_INVALIDOS"));
+	}
+
+	private Cookie csrfCookie() throws Exception {
+		MvcResult result = mvc.perform(get("/api/auth/csrf")).andExpect(status().isNoContent()).andReturn();
+		String header = result.getResponse().getHeaders("Set-Cookie").stream()
+			.filter(value -> value.startsWith("XSRF-TOKEN="))
+			.findFirst()
+			.orElseThrow(() -> new AssertionError("Cookie XSRF-TOKEN ausente"));
+		return new Cookie("XSRF-TOKEN", header.substring("XSRF-TOKEN=".length(), header.indexOf(';')));
+	}
+
+	private static MockHttpServletRequestBuilder requisicaoDeLogin(String email, String senha) {
+		return post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+			.content("{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, senha));
+	}
+
 	private Cookie login(String email, String senha, Cookie sessaoAtual) throws Exception {
-		var request = post("/login").param("email", email).param("senha", senha).with(csrf());
+		var request = requisicaoDeLogin(email, senha).with(TestData.csrfDaSpa());
 		if (sessaoAtual != null) {
 			request.cookie(sessaoAtual);
 		}
@@ -131,7 +182,7 @@ class SecurityIntegrationTests {
 	}
 
 	private String falhaDeLogin(String email, String senha) throws Exception {
-		MvcResult result = mvc.perform(post("/login").param("email", email).param("senha", senha).with(csrf()))
+		MvcResult result = mvc.perform(requisicaoDeLogin(email, senha).with(TestData.csrfDaSpa()))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.code").value("CREDENCIAIS_INVALIDAS"))
 			.andReturn();
