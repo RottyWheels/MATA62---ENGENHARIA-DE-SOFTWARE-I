@@ -22,7 +22,10 @@ import org.springframework.web.bind.annotation.RestController;
 import br.ufba.veridt.shared.error.exception.BusinessException;
 import br.ufba.veridt.shared.error.exception.ConflictException;
 import br.ufba.veridt.shared.error.exception.ResourceNotFoundException;
+import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Valid;
+import jakarta.validation.Validation;
+import jakarta.validation.ValidatorFactory;
 import jakarta.validation.constraints.NotBlank;
 
 class GlobalExceptionHandlerTests {
@@ -89,6 +92,15 @@ class GlobalExceptionHandlerTests {
 	}
 
 	@Test
+	void validacaoDeServicoRetorna400ComOsCampos() throws Exception {
+		mockMvc.perform(get("/validacao-servico"))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.code").value("DADOS_INVALIDOS"))
+			.andExpect(jsonPath("$.errors[0].field").value("nome"))
+			.andExpect(jsonPath("$.errors[0].message").value("obrigatório"));
+	}
+
+	@Test
 	void excecaoDeSegurancaNaoECapturada() {
 		assertThatThrownBy(() -> mockMvc.perform(get("/negado")))
 			.hasRootCauseInstanceOf(AccessDeniedException.class);
@@ -127,6 +139,14 @@ class GlobalExceptionHandlerTests {
 		@GetMapping("/negado")
 		void negado() {
 			throw new AccessDeniedException("negado");
+		}
+
+		/** Simula a validação de parâmetros de um service anotado com {@code @Validated}. */
+		@GetMapping("/validacao-servico")
+		void validacaoServico() {
+			try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+				throw new ConstraintViolationException(factory.getValidator().validate(new TestRequest("")));
+			}
 		}
 
 	}

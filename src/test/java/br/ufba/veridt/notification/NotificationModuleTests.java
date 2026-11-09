@@ -10,7 +10,6 @@ import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
@@ -20,35 +19,68 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.IncompleteEventPublications;
 import org.springframework.modulith.test.ApplicationModuleTest;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.ufba.veridt.TestcontainersConfiguration;
+import br.ufba.veridt.notification.internal.cleanup.SensitivePublicationCleanup;
 
 @ApplicationModuleTest
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @Import({ TestcontainersConfiguration.class, NotificationModuleTests.TestBeans.class })
 class NotificationModuleTests {
 
 	private static final Duration ESPERA = Duration.ofSeconds(10);
 
-	@Autowired
-	private TestPublisher publisher;
+	private final TestPublisher publisher;
+	private final RecordingEmailSender sender;
+	private final IncompleteEventPublications incompletePublications;
+	private final JdbcTemplate jdbc;
+	private final ApplicationContext context;
+	private final SensitivePublicationCleanup cleanup;
 
-	@Autowired
-	private RecordingEmailSender sender;
-
-	@Autowired
-	private IncompleteEventPublications incompletePublications;
-
-	@Autowired
-	private JdbcTemplate jdbc;
-
-	@Autowired
-	private ApplicationContext context;
+	NotificationModuleTests(TestPublisher publisher, RecordingEmailSender sender,
+			IncompleteEventPublications incompletePublications, JdbcTemplate jdbc, ApplicationContext context,
+			SensitivePublicationCleanup cleanup) {
+		this.publisher = publisher;
+		this.sender = sender;
+		this.incompletePublications = incompletePublications;
+		this.jdbc = jdbc;
+		this.context = context;
+		this.cleanup = cleanup;
+	}
 
 	@BeforeEach
 	void limpar() {
 		sender.reset();
 		jdbc.update("DELETE FROM event_publication");
+	}
+
+	@Test
+	void limpezaApagaSoOsEmailsSensiveisJaEnviados() {
+		publisher.publish(new EmailRequested("ana@exemplo.com", EmailType.RECUPERACAO_SENHA,
+				Map.of("nome", "Ana", "link", "https://veridt.local/redefinir?token=segredo", "validadeMinutos", "15")));
+		publisher.publish(pedido("ana@exemplo.com"));
+		await().atMost(ESPERA).until(() -> publicacoesConcluidas() == 2);
+
+		cleanup.deleteSentSensitiveEmails();
+
+		assertThat(publicacoesConcluidas()).isEqualTo(1);
+		assertThat(jdbc.queryForObject("SELECT serialized_event FROM event_publication", String.class))
+			.contains("COMPRA_CONFIRMADA")
+			.doesNotContain("segredo");
+	}
+
+	@Test
+	void limpezaNaoApagaEmailSensivelAindaPendente() {
+		sender.failing(true);
+		publisher.publish(new EmailRequested("ana@exemplo.com", EmailType.RECUPERACAO_SENHA,
+				Map.of("nome", "Ana", "link", "https://veridt.local/redefinir?token=segredo", "validadeMinutos", "15")));
+		await().atMost(ESPERA).until(() -> publicacoesComFalha() == 1);
+
+		cleanup.deleteSentSensitiveEmails();
+
+		assertThat(publicacoesPendentes()).isEqualTo(1);
 	}
 
 	@Test
@@ -126,6 +158,11 @@ class NotificationModuleTests {
 		await().atMost(ESPERA).until(() -> publicacoesComFalha() == 1);
 		assertThat(sender.sent()).isEmpty();
 		assertThat(publicacoesPendentes()).isEqualTo(1);
+	}
+
+	private int publicacoesConcluidas() {
+		return jdbc.queryForObject("SELECT COUNT(*) FROM event_publication WHERE completion_date IS NOT NULL",
+				Integer.class);
 	}
 
 	private int publicacoesPendentes() {
