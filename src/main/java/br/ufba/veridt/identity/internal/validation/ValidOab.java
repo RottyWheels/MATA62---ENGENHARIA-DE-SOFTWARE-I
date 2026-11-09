@@ -9,14 +9,14 @@ import java.lang.annotation.Target;
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
 
-/** OAB (número de até 6 dígitos e UF) obrigatória para advogado e ausente para os demais tipos. */
+/** Inscrições na OAB obrigatórias para advogado e ausentes nos demais tipos, sem repetição e com uma só principal. */
 @Documented
 @Constraint(validatedBy = OabValidator.class)
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ValidOab {
 
-	String message() default "OAB inválida para o tipo de usuário";
+	String message() default "Inscrições OAB inválidas para o tipo de usuário";
 
 	Class<?>[] groups() default {};
 

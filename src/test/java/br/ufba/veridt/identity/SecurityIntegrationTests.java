@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -18,6 +17,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.Authentication;
+import org.springframework.test.context.TestConstructor;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,21 +31,23 @@ import jakarta.servlet.http.Cookie;
 /** ID-01 e ID-04 pela cadeia real de filtros: Spring Session JDBC + Spring Security. */
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 @Import({ TestcontainersConfiguration.class, SecurityIntegrationTests.Endpoints.class })
 class SecurityIntegrationTests {
 
 	private static final String CPF = TestData.cpf("529982247");
 
-	@Autowired
-	private MockMvc mvc;
-
-	@Autowired
-	private RegistrationService registration;
-
-	@Autowired
-	private JdbcTemplate jdbc;
+	private final MockMvc mvc;
+	private final RegistrationService registration;
+	private final JdbcTemplate jdbc;
 
 	private UserResponse ana;
+
+	SecurityIntegrationTests(MockMvc mvc, RegistrationService registration, JdbcTemplate jdbc) {
+		this.mvc = mvc;
+		this.registration = registration;
+		this.jdbc = jdbc;
+	}
 
 	@BeforeEach
 	void preparar() {
@@ -60,6 +62,14 @@ class SecurityIntegrationTests {
 		mvc.perform(get("/teste/eu"))
 			.andExpect(status().isUnauthorized())
 			.andExpect(jsonPath("$.code").value("NAO_AUTENTICADO"));
+	}
+
+	@Test
+	void requisicaoAnonimaNaoCriaSessao() throws Exception {
+		MvcResult result = mvc.perform(get("/teste/eu")).andExpect(status().isUnauthorized()).andReturn();
+
+		assertThat(result.getResponse().getHeaders("Set-Cookie")).noneMatch(value -> value.startsWith("SESSION="));
+		assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM spring_session", Integer.class)).isZero();
 	}
 
 	@Test

@@ -10,9 +10,8 @@ import java.util.HexFormat;
 import java.util.Map;
 
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.session.FindByIndexNameSessionRepository;
-import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
@@ -21,18 +20,16 @@ import br.ufba.veridt.identity.internal.config.IdentityProperties;
 import br.ufba.veridt.identity.internal.domain.PasswordResetToken;
 import br.ufba.veridt.identity.internal.domain.User;
 import br.ufba.veridt.identity.internal.dto.ResetPasswordRequest;
+import br.ufba.veridt.identity.internal.event.PasswordChanged;
+import br.ufba.veridt.identity.internal.exception.InvalidResetTokenException;
 import br.ufba.veridt.identity.internal.repository.PasswordResetTokenRepository;
 import br.ufba.veridt.identity.internal.repository.UserRepository;
 import br.ufba.veridt.notification.EmailRequested;
 import br.ufba.veridt.notification.EmailType;
-import br.ufba.veridt.shared.error.exception.BusinessException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
-/**
- * Recuperação de senha (REQ 02). O token vai só no e-mail; o banco guarda o SHA-256, com validade e uso único. A
- * resposta do pedido é a mesma para e-mail cadastrado ou não.
- */
+/** Recuperação de senha (REQ 02). O token vai só no e-mail; o banco guarda o SHA-256, com validade e uso único. */
 @Service
 @Validated
 public class PasswordResetService {
@@ -44,20 +41,22 @@ public class PasswordResetService {
 	private final PasswordResetTokenRepository tokens;
 	private final PasswordEncoder passwordEncoder;
 	private final ApplicationEventPublisher events;
-	private final FindByIndexNameSessionRepository<? extends Session> sessions;
 	private final IdentityProperties properties;
 
 	public PasswordResetService(UserRepository users, PasswordResetTokenRepository tokens,
-			PasswordEncoder passwordEncoder, ApplicationEventPublisher events,
-			FindByIndexNameSessionRepository<? extends Session> sessions, IdentityProperties properties) {
+			PasswordEncoder passwordEncoder, ApplicationEventPublisher events, IdentityProperties properties) {
 		this.users = users;
 		this.tokens = tokens;
 		this.passwordEncoder = passwordEncoder;
 		this.events = events;
-		this.sessions = sessions;
 		this.properties = properties;
 	}
 
+	/**
+	 * Roda em segundo plano para o chamador retornar na hora: com e-mail cadastrado há gravações no banco, e o tempo de
+	 * resposta revelaria quais e-mails existem.
+	 */
+	@Async("applicationTaskExecutor")
 	@Transactional
 	public void requestReset(@NotBlank String email) {
 		users.findByEmail(User.normalizeEmail(email)).ifPresent(this::issueToken);
@@ -68,13 +67,12 @@ public class PasswordResetService {
 		Instant now = Instant.now();
 		PasswordResetToken token = tokens.findByTokenHash(hash(request.token()))
 			.filter(candidate -> candidate.isUsable(now))
-			.orElseThrow(PasswordResetService::invalidToken);
-		User user = users.findById(token.getUserId()).orElseThrow(PasswordResetService::invalidToken);
+			.orElseThrow(InvalidResetTokenException::new);
+		User user = users.findById(token.getUserId()).orElseThrow(InvalidResetTokenException::new);
 
 		user.changePassword(passwordEncoder.encode(request.newPassword()));
 		token.markUsed(now);
-		// Encerra as sessões abertas: quem tinha acesso com a senha antiga perde o acesso.
-		sessions.findByPrincipalName(user.getId().toString()).keySet().forEach(sessions::deleteById);
+		events.publishEvent(new PasswordChanged(user.getId()));
 	}
 
 	private void issueToken(User user) {
@@ -93,7 +91,7 @@ public class PasswordResetService {
 		return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
 	}
 
-	static String hash(String token) {
+	private static String hash(String token) {
 		try {
 			byte[] digest = MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8));
 			return HexFormat.of().formatHex(digest);
@@ -101,11 +99,6 @@ public class PasswordResetService {
 		catch (NoSuchAlgorithmException ex) {
 			throw new IllegalStateException("SHA-256 indisponível", ex);
 		}
-	}
-
-	private static BusinessException invalidToken() {
-		// Mesma resposta para token inexistente, expirado ou já usado.
-		return new BusinessException("TOKEN_INVALIDO", "Link de redefinição de senha inválido ou expirado.");
 	}
 
 }

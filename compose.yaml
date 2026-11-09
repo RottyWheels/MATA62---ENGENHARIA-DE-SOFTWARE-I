@@ -47,6 +47,11 @@ services:
       - SPRING_MAIL_HOST=mailpit
       - SPRING_MAIL_PORT=1025
       - MAIL_FROM=${MAIL_FROM:-no-reply@veridt.local}
+      - MAIL_THREADS=${MAIL_THREADS:-2}
+      - MAIL_SENSITIVE_CLEANUP_INTERVAL=${MAIL_SENSITIVE_CLEANUP_INTERVAL:-PT5M}
+      - RESET_URL=${RESET_URL:-http://localhost:8080/redefinir-senha}
+      - RESET_TOKEN_VALIDITY=${RESET_TOKEN_VALIDITY:-15m}
+      - PASSWORD_MIN_LENGTH=${PASSWORD_MIN_LENGTH:-8}
     depends_on:
       postgres:
         condition: service_healthy

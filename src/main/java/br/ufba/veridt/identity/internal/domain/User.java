@@ -37,28 +37,18 @@ public class User {
 	@Column(name = "tipo", nullable = false, length = 20)
 	private UserType type;
 
-	@Column(name = "oab_numero", length = 6)
-	private String oabNumber;
-
-	@Enumerated(EnumType.STRING)
-	@Column(name = "oab_uf", length = 2)
-	private Uf oabState;
-
 	@Column(name = "criado_em", nullable = false)
 	private Instant createdAt;
 
 	protected User() {
 	}
 
-	public User(String fullName, String email, String passwordHash, String cpf, UserType type, String oabNumber,
-			Uf oabState) {
+	public User(String fullName, String email, String passwordHash, String cpf, UserType type) {
 		this.fullName = fullName.strip();
 		this.email = normalizeEmail(email);
 		this.passwordHash = passwordHash;
 		this.cpf = normalizeCpf(cpf);
 		this.type = type;
-		this.oabNumber = type == UserType.ADVOGADO ? oabNumber : null;
-		this.oabState = type == UserType.ADVOGADO ? oabState : null;
 		this.createdAt = Instant.now();
 	}
 
@@ -98,14 +88,6 @@ public class User {
 
 	public UserType getType() {
 		return type;
-	}
-
-	public String getOabNumber() {
-		return oabNumber;
-	}
-
-	public Uf getOabState() {
-		return oabState;
 	}
 
 	public Instant getCreatedAt() {

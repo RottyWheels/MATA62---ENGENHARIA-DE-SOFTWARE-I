@@ -19,9 +19,17 @@ import org.springframework.security.web.authentication.logout.HttpStatusReturnin
 @EnableConfigurationProperties(IdentityProperties.class)
 public class SecurityConfig {
 
+	// Argon2id com a configuração mínima recomendada pelo OWASP: 19 MiB e 2 iterações.
+	private static final int ARGON2_SALT_BYTES = 16;
+	private static final int ARGON2_HASH_BYTES = 32;
+	private static final int ARGON2_PARALLELISM = 1;
+	private static final int ARGON2_MEMORY_KIB = 19456;
+	private static final int ARGON2_ITERATIONS = 2;
+
 	@Bean
 	PasswordEncoder passwordEncoder() {
-		return Argon2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+		return new Argon2PasswordEncoder(ARGON2_SALT_BYTES, ARGON2_HASH_BYTES, ARGON2_PARALLELISM, ARGON2_MEMORY_KIB,
+				ARGON2_ITERATIONS);
 	}
 
 	@Bean
@@ -40,6 +48,8 @@ public class SecurityConfig {
 			.logout(logout -> logout
 				.logoutUrl("/logout")
 				.logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
+			// O login não redireciona, então guardar a requisição negada só criaria uma sessão por visitante anônimo.
+			.requestCache(cache -> cache.disable())
 			.exceptionHandling(handling -> handling
 				.authenticationEntryPoint((request, response, exception) -> errors.write(response,
 						HttpStatus.UNAUTHORIZED, "NAO_AUTENTICADO", "Autenticação necessária."))
