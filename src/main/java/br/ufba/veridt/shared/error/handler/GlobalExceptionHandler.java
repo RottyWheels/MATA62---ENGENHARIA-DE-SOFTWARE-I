@@ -20,6 +20,8 @@ import br.ufba.veridt.shared.error.dto.FieldErrorResponse;
 import br.ufba.veridt.shared.error.exception.BusinessException;
 import br.ufba.veridt.shared.error.exception.ConflictException;
 import br.ufba.veridt.shared.error.exception.ResourceNotFoundException;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
 
 /** Converte exceções em {@link ErrorResponse}. A herança mantém o status correto dos erros do Spring MVC. */
 @RestControllerAdvice
@@ -42,6 +44,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	@ExceptionHandler(BusinessException.class)
 	ResponseEntity<ErrorResponse> handleBusiness(BusinessException ex) {
 		return businessError(HttpStatus.UNPROCESSABLE_CONTENT, ex);
+	}
+
+	/** Validação de parâmetros de services ({@code @Validated}), que não passa pelo Spring MVC. */
+	@ExceptionHandler(ConstraintViolationException.class)
+	ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
+		List<FieldErrorResponse> errors = ex.getConstraintViolations().stream()
+			.map(violation -> new FieldErrorResponse(lastNode(violation.getPropertyPath()), violation.getMessage()))
+			.toList();
+		HttpStatus status = HttpStatus.BAD_REQUEST;
+		return ResponseEntity.status(status)
+			.body(ErrorResponse.of(status.value(), DADOS_INVALIDOS, "Dados inválidos.", errors));
 	}
 
 	/** Relança para o Spring Security responder 401 ou 403, em vez de cair no erro 500 abaixo. */
@@ -79,6 +92,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 	private static ResponseEntity<ErrorResponse> businessError(HttpStatus status, BusinessException ex) {
 		ErrorResponse body = ErrorResponse.of(status.value(), ex.getCode(), ex.getMessage());
 		return ResponseEntity.status(status).body(body);
+	}
+
+	/** De "register.request.email" fica só "email", o nome do campo que o cliente enviou. */
+	private static String lastNode(Path path) {
+		String field = null;
+		for (Path.Node node : path) {
+			field = node.getName();
+		}
+		return field;
 	}
 
 	private static FieldErrorResponse toFieldError(FieldError error) {

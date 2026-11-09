@@ -23,6 +23,7 @@ import org.springframework.modulith.test.ApplicationModuleTest;
 import org.springframework.transaction.annotation.Transactional;
 
 import br.ufba.veridt.TestcontainersConfiguration;
+import br.ufba.veridt.notification.internal.cleanup.SensitivePublicationCleanup;
 
 @ApplicationModuleTest
 @Import({ TestcontainersConfiguration.class, NotificationModuleTests.TestBeans.class })
@@ -45,10 +46,40 @@ class NotificationModuleTests {
 	@Autowired
 	private ApplicationContext context;
 
+	@Autowired
+	private SensitivePublicationCleanup cleanup;
+
 	@BeforeEach
 	void limpar() {
 		sender.reset();
 		jdbc.update("DELETE FROM event_publication");
+	}
+
+	@Test
+	void limpezaApagaSoOsEmailsSensiveisJaEnviados() {
+		publisher.publish(new EmailRequested("ana@exemplo.com", EmailType.RECUPERACAO_SENHA,
+				Map.of("nome", "Ana", "link", "https://veridt.local/redefinir?token=segredo", "validadeMinutos", "15")));
+		publisher.publish(pedido("ana@exemplo.com"));
+		await().atMost(ESPERA).until(() -> publicacoesConcluidas() == 2);
+
+		cleanup.deleteSentSensitiveEmails();
+
+		assertThat(publicacoesConcluidas()).isEqualTo(1);
+		assertThat(jdbc.queryForObject("SELECT serialized_event FROM event_publication", String.class))
+			.contains("COMPRA_CONFIRMADA")
+			.doesNotContain("segredo");
+	}
+
+	@Test
+	void limpezaNaoApagaEmailSensivelAindaPendente() {
+		sender.failing(true);
+		publisher.publish(new EmailRequested("ana@exemplo.com", EmailType.RECUPERACAO_SENHA,
+				Map.of("nome", "Ana", "link", "https://veridt.local/redefinir?token=segredo", "validadeMinutos", "15")));
+		await().atMost(ESPERA).until(() -> publicacoesComFalha() == 1);
+
+		cleanup.deleteSentSensitiveEmails();
+
+		assertThat(publicacoesPendentes()).isEqualTo(1);
 	}
 
 	@Test
@@ -126,6 +157,11 @@ class NotificationModuleTests {
 		await().atMost(ESPERA).until(() -> publicacoesComFalha() == 1);
 		assertThat(sender.sent()).isEmpty();
 		assertThat(publicacoesPendentes()).isEqualTo(1);
+	}
+
+	private int publicacoesConcluidas() {
+		return jdbc.queryForObject("SELECT COUNT(*) FROM event_publication WHERE completion_date IS NOT NULL",
+				Integer.class);
 	}
 
 	private int publicacoesPendentes() {
