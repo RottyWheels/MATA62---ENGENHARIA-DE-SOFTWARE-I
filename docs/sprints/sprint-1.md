@@ -1,16 +1,16 @@
-# Sprint 1: Fundação, notificações e identidade
+# Sprint 1: Fundação, notificações, identidade e armazenamento
 
 | | |
 |---|---|
-| **Período** | 06/11/2026 a 10/11/2026 |
-| **Branch de integração** | `desenv` (merge `07c7cfe`) |
-| **Pull requests** | #1, #2, #4, #6 e #7 |
+| **Período** | 06/11/2026 a 11/11/2026 |
+| **Branch de integração** | `desenv` (merge `989c2ec`) |
+| **Pull requests** | #1, #2, #4, #6, #7, #9 e #11 |
 | **Requisitos atendidos** | REQ 01, 02, 03 e 04 |
-| **Tarefas concluídas** | 12 de 41 do backlog |
+| **Tarefas concluídas** | 14 de 41 do backlog |
 
 ## Objetivo
 
-Preparar a base técnica do back-end e entregar o primeiro módulo de negócio completo: cadastro, login, logout e recuperação de senha, com e-mail assíncrono e auditoria.
+Preparar a base técnica do back-end e entregar o primeiro módulo de negócio completo: cadastro, login, logout e recuperação de senha, com e-mail assíncrono e auditoria. A sprint também entregou o armazenamento de arquivos, base para os módulos de captura e de registros.
 
 ## Entregas
 
@@ -63,6 +63,15 @@ O envio roda em um executor próprio, para não ocupar as threads do restante da
 
 Falhas são registradas em transação própria, para não se perderem quando a operação principal é desfeita. Nenhum dado pessoal vai para o detalhe do registro.
 
+### Storage (PRs #9 e #11)
+
+| Tarefa | Entrega |
+|---|---|
+| STO-01 | API pública `FileStorage` para gravar, abrir e consultar arquivos. Cada gravação retorna chave, tamanho e SHA-256, calculado durante a escrita. Um arquivo nunca é sobrescrito, e as chaves são validadas para impedir caminhos inválidos. Inclui testes de contrato que toda implementação deve passar e uma versão em memória para os testes de outros módulos. |
+| STO-02 | Implementação real sobre a API S3 (AWS SDK v2), usando o SeaweedFS no Docker Compose, com volume próprio. O próprio servidor recusa sobrescrita, e o hash fica salvo nos metadados do arquivo. O bucket é criado na primeira gravação, então a aplicação sobe mesmo sem o S3 disponível. |
+
+O SeaweedFS foi escolhido porque a versão comunitária do MinIO foi descontinuada. Como a aplicação usa a API S3 genérica, trocar de provedor exige só configuração.
+
 ## Banco de dados
 
 | Migration | Conteúdo |
@@ -74,16 +83,17 @@ Falhas são registradas em transação própria, para não se perderem quando a 
 
 ## Qualidade
 
-- **Testes:** 119 testes automatizados, todos passando em 10/11/2026 no código do `desenv`. Os testes de integração usam Postgres e Mailpit reais via Testcontainers.
-- **Cobertura por área:** fronteiras entre módulos, tratamento de erros, envio e modelos de e-mail, regras de cadastro (CPF, senha, restrições do banco), segurança e CSRF, rotas REST e auditoria.
+- **Testes:** 159 testes automatizados, todos passando em 11/11/2026 no código do `desenv`. Os testes de integração usam Postgres, Mailpit e SeaweedFS reais via Testcontainers.
+- **Cobertura por área:** fronteiras entre módulos, tratamento de erros, envio e modelos de e-mail, regras de cadastro (CPF, senha, restrições do banco), segurança e CSRF, rotas REST, auditoria e armazenamento de arquivos.
 - **Características da ADR-0002 atendidas:**
   - Segurança: Argon2id, sessões no servidor, CSRF e acesso negado por padrão.
-  - Confiabilidade: e-mail assíncrono com reenvio.
-  - Rastreabilidade e auditabilidade: log de auditoria que não pode ser alterado.
+  - Confiabilidade: e-mail assíncrono com reenvio e arquivos que não podem ser sobrescritos.
+  - Rastreabilidade e auditabilidade: log de auditoria que não pode ser alterado e SHA-256 de cada arquivo armazenado.
 
 ## Decisões tomadas na sprint
 
 | Pendência | Decisão | Situação |
 |---|---|---|
 | P1: Frontend | SPA | Aplicada nas rotas REST e no CSRF |
+| P3: Armazenamento | API S3 com SeaweedFS | Aplicada no módulo `storage` |
 | P6: Auditoria fora de `records` | `shared.audit`, uma tabela usada por todos os módulos | Aplicada na auditoria do `identity` |
