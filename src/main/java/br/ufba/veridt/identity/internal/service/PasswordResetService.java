@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import br.ufba.veridt.identity.internal.audit.IdentityAuditOperation;
 import br.ufba.veridt.identity.internal.config.IdentityProperties;
 import br.ufba.veridt.identity.internal.domain.PasswordResetToken;
 import br.ufba.veridt.identity.internal.domain.User;
@@ -26,6 +27,7 @@ import br.ufba.veridt.identity.internal.repository.PasswordResetTokenRepository;
 import br.ufba.veridt.identity.internal.repository.UserRepository;
 import br.ufba.veridt.notification.EmailRequested;
 import br.ufba.veridt.notification.EmailType;
+import br.ufba.veridt.shared.audit.AuditLog;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
@@ -42,14 +44,17 @@ public class PasswordResetService {
 	private final PasswordEncoder passwordEncoder;
 	private final ApplicationEventPublisher events;
 	private final IdentityProperties properties;
+	private final AuditLog auditLog;
 
 	public PasswordResetService(UserRepository users, PasswordResetTokenRepository tokens,
-			PasswordEncoder passwordEncoder, ApplicationEventPublisher events, IdentityProperties properties) {
+			PasswordEncoder passwordEncoder, ApplicationEventPublisher events, IdentityProperties properties,
+			AuditLog auditLog) {
 		this.users = users;
 		this.tokens = tokens;
 		this.passwordEncoder = passwordEncoder;
 		this.events = events;
 		this.properties = properties;
+		this.auditLog = auditLog;
 	}
 
 	/**
@@ -67,12 +72,19 @@ public class PasswordResetService {
 		Instant now = Instant.now();
 		PasswordResetToken token = tokens.findByTokenHash(hash(request.token()))
 			.filter(candidate -> candidate.isUsable(now))
-			.orElseThrow(InvalidResetTokenException::new);
-		User user = users.findById(token.getUserId()).orElseThrow(InvalidResetTokenException::new);
+			.orElseThrow(this::invalidToken);
+		User user = users.findById(token.getUserId()).orElseThrow(this::invalidToken);
 
 		user.changePassword(passwordEncoder.encode(request.newPassword()));
 		token.markUsed(now);
 		events.publishEvent(new PasswordChanged(user.getId()));
+		auditLog.recordSuccess(IdentityAuditOperation.REDEFINICAO_SENHA, user.getId());
+	}
+
+	/** Registra a tentativa sem usuário: o token não identifica com segurança a quem pertence. */
+	private InvalidResetTokenException invalidToken() {
+		auditLog.recordFailure(IdentityAuditOperation.REDEFINICAO_SENHA, null, "TOKEN_INVALIDO");
+		return new InvalidResetTokenException();
 	}
 
 	private void issueToken(User user) {
