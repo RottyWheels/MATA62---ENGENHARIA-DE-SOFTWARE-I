@@ -158,6 +158,26 @@ class SecurityIntegrationTests {
 			.andExpect(jsonPath("$.code").value("DADOS_INVALIDOS"));
 	}
 
+	@Test
+	void meSemSessaoRetorna401() throws Exception {
+		mvc.perform(get("/api/me"))
+			.andExpect(status().isUnauthorized())
+			.andExpect(jsonPath("$.code").value("NAO_AUTENTICADO"));
+	}
+
+	@Test
+	void meRetornaOUsuarioDaSessaoSemCpf() throws Exception {
+		Cookie sessao = login("ana@exemplo.com", TestData.SENHA, null);
+
+		mvc.perform(get("/api/me").cookie(sessao))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.id").value(ana.id().toString()))
+			.andExpect(jsonPath("$.email").value("ana@exemplo.com"))
+			.andExpect(jsonPath("$.type").value("COMUM"))
+			.andExpect(jsonPath("$.cpf").doesNotExist())
+			.andExpect(jsonPath("$.passwordHash").doesNotExist());
+	}
+
 	private Cookie csrfCookie() throws Exception {
 		MvcResult result = mvc.perform(get("/api/auth/csrf")).andExpect(status().isNoContent()).andReturn();
 		String header = result.getResponse().getHeaders("Set-Cookie").stream()
