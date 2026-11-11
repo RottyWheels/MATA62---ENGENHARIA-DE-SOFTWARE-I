@@ -49,11 +49,15 @@ import br.ufba.veridt.identity.internal.service.PasswordResetService;
 import br.ufba.veridt.identity.internal.service.RegistrationService;
 import br.ufba.veridt.notification.EmailRequested;
 import br.ufba.veridt.notification.EmailType;
+import br.ufba.veridt.shared.audit.AuditLog;
+import br.ufba.veridt.shared.audit.AuditRepository;
 import jakarta.validation.ConstraintViolationException;
 
 @ApplicationModuleTest
 @TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
-@Import({ TestcontainersConfiguration.class, IdentityModuleTests.TestBeans.class })
+// O teste de módulo só carrega o pacote identity; a auditoria compartilhada vem de shared.
+@Import({ TestcontainersConfiguration.class, IdentityModuleTests.TestBeans.class, AuditLog.class,
+		AuditRepository.class })
 class IdentityModuleTests {
 
 	private static final Duration ESPERA = Duration.ofSeconds(10);

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 
+import br.ufba.veridt.identity.internal.audit.IdentityAuditOperation;
 import br.ufba.veridt.identity.internal.domain.OabRegistration;
 import br.ufba.veridt.identity.internal.domain.User;
 import br.ufba.veridt.identity.internal.dto.OabRegistrationRequest;
@@ -20,6 +21,7 @@ import br.ufba.veridt.identity.internal.exception.RegistrationConstraintTranslat
 import br.ufba.veridt.identity.internal.mapper.UserMapper;
 import br.ufba.veridt.identity.internal.repository.OabRegistrationRepository;
 import br.ufba.veridt.identity.internal.repository.UserRepository;
+import br.ufba.veridt.shared.audit.AuditLog;
 import jakarta.validation.Valid;
 
 /** Cadastro de usuários (REQ 01). A senha é gravada só como hash Argon2id. */
@@ -32,14 +34,16 @@ public class RegistrationService {
 	private final UserMapper mapper;
 	private final PasswordEncoder passwordEncoder;
 	private final RegistrationConstraintTranslator constraintTranslator;
+	private final AuditLog auditLog;
 
 	public RegistrationService(UserRepository users, OabRegistrationRepository oabRegistrations, UserMapper mapper,
-			PasswordEncoder passwordEncoder, RegistrationConstraintTranslator constraintTranslator) {
+			PasswordEncoder passwordEncoder, RegistrationConstraintTranslator constraintTranslator, AuditLog auditLog) {
 		this.users = users;
 		this.oabRegistrations = oabRegistrations;
 		this.mapper = mapper;
 		this.passwordEncoder = passwordEncoder;
 		this.constraintTranslator = constraintTranslator;
+		this.auditLog = auditLog;
 	}
 
 	@Transactional
@@ -52,6 +56,7 @@ public class RegistrationService {
 			users.saveAndFlush(user);
 			List<OabRegistration> saved = oabRegistrations
 				.saveAllAndFlush(mapper.toOabRegistrations(requestedOab, user.getId()));
+			auditLog.recordSuccess(IdentityAuditOperation.CADASTRO, user.getId());
 			return mapper.toResponse(user, saved);
 		}
 		catch (DataIntegrityViolationException ex) {
