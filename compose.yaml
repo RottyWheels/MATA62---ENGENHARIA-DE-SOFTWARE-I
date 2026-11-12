@@ -74,7 +74,7 @@ services:
       - MAIL_FROM=${MAIL_FROM:-no-reply@veridt.local}
       - MAIL_THREADS=${MAIL_THREADS:-2}
       - MAIL_SENSITIVE_CLEANUP_INTERVAL=${MAIL_SENSITIVE_CLEANUP_INTERVAL:-PT5M}
-      - RESET_URL=${RESET_URL:-http://localhost:8080/redefinir-senha}
+      - RESET_URL=${RESET_URL:-http://localhost:3000/redefinir-senha}
       - RESET_TOKEN_VALIDITY=${RESET_TOKEN_VALIDITY:-15m}
       - PASSWORD_MIN_LENGTH=${PASSWORD_MIN_LENGTH:-8}
       - S3_ENDPOINT=http://seaweedfs:8333
@@ -88,6 +88,23 @@ services:
         condition: service_started
       seaweedfs:
         condition: service_healthy
+    networks:
+      - veridt-net
+
+  # SPA (repositório separado). O nginx serve a SPA e encaminha /api e /ws para o backend nesta rede, então o navegador
+  # fala com uma única origem: o cookie de sessão e o CSRF funcionam sem CORS.
+  frontend:
+    build:
+      # Padrão: repositórios clonados lado a lado. Em outro lugar, defina FRONTEND_PATH no .env.
+      context: ${FRONTEND_PATH:-../-MATA62---ENGENHARIA-DE-SOFTWARE-I-frontend}
+    image: veridt-frontend
+    container_name: veridt_frontend
+    restart: always
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+    depends_on:
+      backend:
+        condition: service_started
     networks:
       - veridt-net
 
