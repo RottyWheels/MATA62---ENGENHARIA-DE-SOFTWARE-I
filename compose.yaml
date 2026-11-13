@@ -97,6 +97,8 @@ services:
     build:
       # Padrão: repositórios clonados lado a lado. Em outro lugar, defina FRONTEND_PATH no .env.
       context: ${FRONTEND_PATH:-../-MATA62---ENGENHARIA-DE-SOFTWARE-I-frontend}
+      # O Dockerfile do frontend fica em docker/; o contexto continua sendo a raiz do repositório.
+      dockerfile: docker/Dockerfile
     image: veridt-frontend
     container_name: veridt_frontend
     restart: always
